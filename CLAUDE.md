@@ -4,40 +4,94 @@ These rules define how we approach every task. Follow this workflow in order.
 
 ---
 
-## HIGHEST PRIORITY: Security Checklist (ALWAYS CHECK)
+## HIGHEST PRIORITY: VPS Security (ALWAYS CHECK)
 
-**CRITICAL**: Before ANY deployment, ALWAYS verify security configuration.
+**CRITICAL**: Security incidents (ransomware, data breaches) are preventable. Follow these rules for ALL VPS deployments.
 
-### Before Deploying ANY Project:
-1. **NEVER expose database ports to the internet**
-   - PostgreSQL (5432), MySQL (3306), Redis (6379) should NEVER have `ports:` in docker-compose
-   - Databases should only be accessible via internal Docker network
-   - BAD: `ports: - "5432:5432"`
-   - GOOD: No ports section (internal only)
+### Layer 1: Network Security (MANDATORY)
 
-2. **ALWAYS use strong passwords**
-   - Generate with: `openssl rand -base64 32 | tr -d '/+=' | head -c 32`
-   - NEVER use defaults like `postgres`, `root`, `password`, `admin`
-   - Store passwords in `.env` files, not docker-compose.yml
+#### Firewall (UFW)
+```bash
+# Enable on first VPS setup
+ufw enable
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+# Add app-specific ports as needed (e.g., 8001 for redirect-mapper)
+ufw status verbose
+```
 
-3. **ALWAYS enable firewall (UFW)**
-   - `ufw enable` on first deployment
-   - Only allow: 22 (SSH), 80 (HTTP), 443 (HTTPS), app-specific ports
-   - Verify with: `ufw status verbose`
+#### Database Ports - NEVER EXPOSE
+| Database | Port | docker-compose.yml |
+|----------|------|-------------------|
+| PostgreSQL | 5432 | NO `ports:` section |
+| MySQL | 3306 | NO `ports:` section |
+| Redis | 6379 | NO `ports:` section |
 
-4. **Verify before deployment**
-   ```bash
-   # Check docker-compose has no exposed DB ports
-   grep -E "ports.*543[0-9]|ports.*330[0-9]|ports.*637[0-9]" docker-compose.yml
-   # Should return nothing
+**BAD**: `ports: - "5432:5432"` (exposes to internet)
+**GOOD**: No ports section (internal Docker network only)
 
-   # Check firewall is active
-   ssh root@SERVER "ufw status"
+### Layer 2: Web Application Firewall (RECOMMENDED)
 
-   # Check no databases are publicly accessible
-   ssh root@SERVER "docker ps --format '{{.Names}} {{.Ports}}' | grep -E 'postgres|mysql|redis'"
-   # Should show no 0.0.0.0 bindings for databases
-   ```
+Install SafeLine WAF to protect web apps from SQL injection, XSS, brute-force:
+```bash
+# Install SafeLine on VPS
+bash -c "$(curl -fsSLk https://waf.chaitin.com/release/latest/setup.sh)"
+# Access dashboard at https://YOUR_VPS_IP:9443
+# Route traffic: Internet → SafeLine → nginx → your apps
+```
+
+### Layer 3: SSH Protection (RECOMMENDED)
+
+Install fail2ban to block brute-force SSH attacks:
+```bash
+apt install fail2ban -y
+systemctl enable fail2ban
+systemctl start fail2ban
+# Check status: fail2ban-client status sshd
+```
+
+### Layer 4: Credentials
+
+**Strong passwords only**:
+```bash
+# Generate secure password
+openssl rand -base64 32 | tr -d '/+=' | head -c 32
+```
+
+**Rules**:
+- NEVER use defaults: `postgres`, `root`, `password`, `admin`
+- Store in `.env` files, NOT in docker-compose.yml or code
+- Rotate passwords after any security incident
+
+### Pre-Deployment Checklist
+
+Run these checks BEFORE every deployment:
+```bash
+# 1. Check no database ports exposed
+grep -E "ports.*543[0-9]|ports.*330[0-9]|ports.*637[0-9]" docker-compose.yml
+# Should return nothing
+
+# 2. Check firewall is active
+ssh root@SERVER "ufw status"
+
+# 3. Check no databases publicly accessible
+ssh root@SERVER "docker ps --format '{{.Names}} {{.Ports}}' | grep -E 'postgres|mysql|redis'"
+# Should show no 0.0.0.0 bindings
+```
+
+### New VPS Setup Checklist
+
+When setting up a NEW VPS:
+- [ ] Update system: `apt update && apt upgrade -y`
+- [ ] Enable UFW firewall with only necessary ports
+- [ ] Install fail2ban for SSH protection
+- [ ] Install SafeLine WAF (if hosting web apps)
+- [ ] Create non-root user for daily operations
+- [ ] Disable root password login (SSH keys only)
+- [ ] Set up automated backups
 
 ---
 

@@ -4,94 +4,357 @@ These rules define how we approach every task. Follow this workflow in order.
 
 ---
 
-## HIGHEST PRIORITY: VPS Security (ALWAYS CHECK)
+## HIGHEST PRIORITY: Security (ALWAYS CHECK)
 
-**CRITICAL**: Security incidents (ransomware, data breaches) are preventable. Follow these rules for ALL VPS deployments.
+**CRITICAL**: Security incidents (ransomware, data breaches) are preventable. Follow these rules for ALL deployments - both VPS servers and local development.
 
-### Layer 1: Network Security (MANDATORY)
+### Quick Reference: What Applies Where
 
-#### Firewall (UFW)
+| Security Measure | VPS Server | Local Dev |
+|-----------------|:----------:|:---------:|
+| Cloudflare DNS Proxy | ✅ | ❌ |
+| UFW Firewall | ✅ | ❌ |
+| SSH Hardening | ✅ | ❌ |
+| Fail2ban | ✅ | ❌ |
+| Docker Port Security | ✅ | ✅ |
+| .env File Permissions | ✅ | ✅ |
+| Credential Management | ✅ | ✅ |
+| SSL Certificates | ✅ | ❌ |
+| Git Security (.gitignore) | ✅ | ✅ |
+
+---
+
+## 1. CLOUDFLARE CONFIGURATION (VPS Only)
+
+### DNS Proxy (CRITICAL)
+All A/AAAA records MUST have orange cloud (Proxied) enabled.
+- Grey cloud = Real IP exposed, NO protection
+- Orange cloud = IP hidden, WAF active, DDoS protection
+
+**Verify**: `dig +short yourdomain.com` should return Cloudflare IP (104.x.x.x), NOT your server IP.
+
+### Recommended Settings
+| Setting | Location | Value |
+|---------|----------|-------|
+| SSL/TLS Mode | SSL/TLS → Overview | Full (strict) |
+| Always Use HTTPS | SSL/TLS → Edge Certificates | ON |
+| Minimum TLS Version | SSL/TLS → Edge Certificates | TLS 1.2 |
+| Bot Fight Mode | Security → Bots | ON |
+| Security Level | Security → Settings | Medium |
+| Browser Integrity Check | Security → Settings | ON |
+
+---
+
+## 2. UFW FIREWALL (VPS Only)
+
+### Required State
+UFW must be ACTIVE with default deny incoming.
+
+### Setup Commands
 ```bash
-# Enable on first VPS setup
-ufw enable
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 22/tcp    # SSH
+ufw allow 22/tcp    # SSH (required)
 ufw allow 80/tcp    # HTTP
 ufw allow 443/tcp   # HTTPS
-# Add app-specific ports as needed (e.g., 8001 for redirect-mapper)
+ufw enable
 ufw status verbose
 ```
 
-#### Database Ports - NEVER EXPOSE
-| Database | Port | docker-compose.yml |
-|----------|------|-------------------|
-| PostgreSQL | 5432 | NO `ports:` section |
-| MySQL | 3306 | NO `ports:` section |
-| Redis | 6379 | NO `ports:` section |
+### NEVER Allow These Ports Publicly
+| Database | Port | Why |
+|----------|------|-----|
+| PostgreSQL | 5432 | Direct DB access = data breach |
+| MySQL | 3306 | Direct DB access = data breach |
+| Redis | 6379 | No auth by default = full access |
+| MongoDB | 27017 | Often misconfigured = data leak |
 
-**BAD**: `ports: - "5432:5432"` (exposes to internet)
-**GOOD**: No ports section (internal Docker network only)
+---
 
-### Layer 2: Web Application Firewall (RECOMMENDED)
+## 3. SSH HARDENING (VPS Only)
 
-Install SafeLine WAF to protect web apps from SQL injection, XSS, brute-force:
+### Configuration File: `/etc/ssh/sshd_config`
 ```bash
-# Install SafeLine on VPS
-bash -c "$(curl -fsSLk https://waf.chaitin.com/release/latest/setup.sh)"
-# Access dashboard at https://YOUR_VPS_IP:9443
-# Route traffic: Internet → SafeLine → nginx → your apps
+PermitRootLogin prohibit-password    # Key-only root login
+PasswordAuthentication no            # Disable password auth
+PubkeyAuthentication yes             # Enable key-based auth
+MaxAuthTries 3                       # Limit login attempts
+LoginGraceTime 60                    # 60 second timeout
+Protocol 2                           # SSH protocol 2 only
 ```
 
-### Layer 3: SSH Protection (RECOMMENDED)
-
-Install fail2ban to block brute-force SSH attacks:
+### Apply Changes
 ```bash
-apt install fail2ban -y
-systemctl enable fail2ban
-systemctl start fail2ban
-# Check status: fail2ban-client status sshd
+sudo systemctl restart ssh
 ```
 
-### Layer 4: Credentials
+**WARNING**: Always test SSH key login in a NEW terminal before disabling passwords!
 
-**Strong passwords only**:
+---
+
+## 4. FAIL2BAN (VPS Only)
+
+### Installation
 ```bash
-# Generate secure password
+apt install -y fail2ban
+systemctl enable --now fail2ban
+```
+
+### Useful Commands
+```bash
+# Check status
+fail2ban-client status sshd
+
+# View banned IPs
+fail2ban-client status sshd | grep "Banned IP"
+
+# Unban an IP (if needed)
+fail2ban-client set sshd unbanip <IP_ADDRESS>
+```
+
+### Custom Configuration
+Create `/etc/fail2ban/jail.local`:
+```ini
+[sshd]
+enabled = true
+port = 22
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600      # 1 hour ban
+findtime = 600      # 10 minute window
+```
+
+---
+
+## 5. DOCKER SECURITY (VPS + Local)
+
+### CRITICAL: Never Expose Database Ports
+
+**BAD** (exposes to internet/network):
+```yaml
+services:
+  postgres:
+    ports:
+      - "5432:5432"    # DANGEROUS!
+```
+
+**GOOD** (internal only):
+```yaml
+services:
+  postgres:
+    # No ports section = internal only
+    networks:
+      - internal
+
+  backend:
+    depends_on:
+      - postgres
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+```
+
+### Check for Exposed Ports
+```bash
+docker ps --format '{{.Names}} {{.Ports}}' | grep -E '0.0.0.0:(5432|3306|6379)'
+```
+If this returns anything, you have exposed database ports. **FIX IMMEDIATELY**.
+
+---
+
+## 6. FILE PERMISSIONS (VPS + Local)
+
+### .env Files (contain secrets)
+```bash
+chmod 600 .env
+chmod 600 /opt/*/.env
+```
+
+### Verify
+```bash
+ls -la .env
+# Should show: -rw------- (600) = owner read/write only
+```
+
+### Git Security
+**ALWAYS** have `.gitignore` with:
+```
+.env
+.env.local
+.env.production
+*.pem
+*.key
+credentials.json
+```
+
+**NEVER** commit secrets to git, even in private repos.
+
+---
+
+## 7. CREDENTIAL MANAGEMENT (VPS + Local)
+
+### Rules
+- **NEVER** use defaults: `postgres`, `root`, `password`, `admin`, `123456`
+- **ALWAYS** store in `.env` files, NOT in code or docker-compose.yml
+- **ROTATE** passwords after any security incident
+
+### Generate Strong Password
+```bash
 openssl rand -base64 32 | tr -d '/+=' | head -c 32
 ```
 
-**Rules**:
-- NEVER use defaults: `postgres`, `root`, `password`, `admin`
-- Store in `.env` files, NOT in docker-compose.yml or code
-- Rotate passwords after any security incident
+### .env File Format
+```bash
+DB_PASSWORD=your_generated_password_here
+API_KEY=your_api_key_here
+SECRET_KEY=your_secret_key_here
+```
 
-### Pre-Deployment Checklist
+---
+
+## 8. SSL CERTIFICATES (VPS Only)
+
+### Check Expiration
+```bash
+echo | openssl s_client -servername yourdomain.com -connect yourdomain.com:443 2>/dev/null | openssl x509 -noout -dates
+```
+
+### Let's Encrypt Auto-Renewal
+```bash
+certbot renew --dry-run    # Test
+certbot renew              # Actually renew
+```
+
+### Verify Auto-Renewal Timer
+```bash
+systemctl list-timers | grep certbot
+```
+
+---
+
+## 9. SYSTEM UPDATES (VPS Only)
+
+### Check Available Updates
+```bash
+apt update
+apt list --upgradable
+```
+
+### Apply Security Updates
+```bash
+apt upgrade -y --only-upgrade
+```
+
+### Enable Automatic Security Updates
+```bash
+apt install -y unattended-upgrades
+dpkg-reconfigure -plow unattended-upgrades
+```
+
+---
+
+## 10. INCIDENT RESPONSE
+
+### If You Suspect a Breach
+
+**1. Check for unauthorized access:**
+```bash
+last -20                                    # Recent logins
+cat /var/log/auth.log | grep -i failed     # Failed attempts
+who                                         # Currently logged in
+```
+
+**2. Check for suspicious processes:**
+```bash
+ps aux | grep -E '(crypto|mine|xmr)'       # Crypto miners
+top -bn1 | head -20                        # High CPU processes
+netstat -tulpn                             # Open connections
+```
+
+**3. Check for unauthorized changes:**
+```bash
+find /opt -mtime -1 -type f                # Files modified in last day
+docker ps -a                               # All containers
+crontab -l                                 # Scheduled tasks
+```
+
+**4. If compromised:**
+- Change all passwords/keys immediately
+- Revoke and regenerate API keys
+- Check for backdoors (new users, cron jobs, SSH keys)
+- Consider rebuilding from clean image
+
+---
+
+## 11. MONTHLY SECURITY CHECKLIST
+
+Run this checklist monthly on all VPS servers:
+
+- [ ] Cloudflare proxy enabled (orange cloud) for all domains
+- [ ] UFW active: `ufw status` shows "Status: active"
+- [ ] No database ports exposed: `docker ps` shows no 5432/3306/6379 on 0.0.0.0
+- [ ] fail2ban running: `systemctl status fail2ban`
+- [ ] SSH key-only: `grep PasswordAuthentication /etc/ssh/sshd_config` shows "no"
+- [ ] .env files secured: `ls -la .env` shows "-rw-------"
+- [ ] SSL certs valid: Check expiration dates
+- [ ] Security updates applied: `apt update && apt list --upgradable`
+- [ ] No suspicious processes: `top` shows normal CPU usage
+- [ ] Backups working: Verify recent backup exists
+
+---
+
+## 12. EMERGENCY COMMANDS
+
+### If Locked Out of SSH
+Use DigitalOcean Console: Droplet → Access → Launch Console
+
+### Useful Commands
+```bash
+# View all listening ports
+ss -tulpn
+
+# View firewall rules
+ufw status numbered
+
+# View Docker networks
+docker network ls
+
+# View container logs
+docker logs <container_name> --tail 100
+
+# Emergency: Block all traffic except SSH
+ufw reset
+ufw default deny incoming
+ufw allow 22/tcp
+ufw enable
+```
+
+---
+
+## Pre-Deployment Checklist
 
 Run these checks BEFORE every deployment:
+
 ```bash
-# 1. Check no database ports exposed
+# 1. Check no database ports exposed in docker-compose
 grep -E "ports.*543[0-9]|ports.*330[0-9]|ports.*637[0-9]" docker-compose.yml
 # Should return nothing
 
-# 2. Check firewall is active
-ssh root@SERVER "ufw status"
+# 2. Check .env is in .gitignore
+grep ".env" .gitignore
+# Should show .env
 
-# 3. Check no databases publicly accessible
-ssh root@SERVER "docker ps --format '{{.Names}} {{.Ports}}' | grep -E 'postgres|mysql|redis'"
-# Should show no 0.0.0.0 bindings
+# 3. Check no secrets in code
+grep -r "password\|api_key\|secret" --include="*.py" --include="*.js" --include="*.ts" .
+# Review any matches - should be env variable references only
 ```
 
-### New VPS Setup Checklist
 
-When setting up a NEW VPS:
-- [ ] Update system: `apt update && apt upgrade -y`
-- [ ] Enable UFW firewall with only necessary ports
-- [ ] Install fail2ban for SSH protection
-- [ ] Install SafeLine WAF (if hosting web apps)
-- [ ] Create non-root user for daily operations
-- [ ] Disable root password login (SSH keys only)
-- [ ] Set up automated backups
+---
 
 ---
 

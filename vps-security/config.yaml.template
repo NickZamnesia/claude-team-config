@@ -1,0 +1,169 @@
+# VPS Security Monitor Configuration Template
+# =============================================
+# Copy this to config.yaml and customize for your VPS.
+#
+# IMPORTANT: Update the following sections:
+#   - projects: Add your project directories
+#   - firewall.allowed_ports: Add ports your apps use
+#   - ssl.domains: Add your SSL domains to monitor
+
+version: "1.0"
+
+# ===================================
+# NOTIFICATION SETTINGS
+# ===================================
+notifications:
+  slack:
+    enabled: true
+    # Loaded from environment variable (set in .env file)
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    # Mention @channel on critical issues
+    mention_on_critical: "<!channel>"
+    # Include server hostname in notifications
+    include_hostname: true
+
+# ===================================
+# PROJECT DIRECTORIES TO MONITOR
+# ===================================
+# Add all your Docker/app projects here.
+# The monitor will check for exposed database ports in docker-compose files.
+
+projects:
+  # Example project 1
+  - name: my-app
+    path: /opt/my-app
+    docker_compose: /opt/my-app/docker-compose.yml
+    allowed_ports: [8001]
+    database_type: postgresql   # postgresql, mysql, or mongodb
+
+  # Example project 2
+  # - name: another-app
+  #   path: /opt/another-app
+  #   docker_compose: /opt/another-app/docker-compose.yml
+  #   allowed_ports: [8002]
+  #   database_type: mysql
+
+# ===================================
+# FIREWALL SETTINGS
+# ===================================
+firewall:
+  required_status: active
+
+  # CUSTOMIZE: Add all ports your applications need
+  allowed_ports:
+    - 22    # SSH (change if using non-standard port)
+    - 80    # HTTP
+    - 443   # HTTPS
+    # - 8001  # Your app port
+    # - 8002  # Another app port
+
+  # Database ports that should NEVER be exposed to the internet
+  # These will trigger CRITICAL alerts if found open
+  dangerous_ports:
+    - 5432  # PostgreSQL
+    - 3306  # MySQL
+    - 3307  # MySQL alternate
+    - 6379  # Redis
+    - 6380  # Redis alternate
+    - 27017 # MongoDB
+    - 9200  # Elasticsearch
+
+# ===================================
+# AUTO-REMEDIATION SETTINGS
+# ===================================
+remediation:
+  enabled: true
+
+  # Issues that will be automatically fixed
+  auto_fix:
+    - firewall_disabled
+    - firewall_missing_rules
+    - file_permissions
+
+  # Issues that generate alerts only (never auto-fix)
+  alert_only:
+    - exposed_database_ports
+    - ssh_config
+    - package_updates
+    - suspicious_processes
+    - ssl_expiring
+
+  backup_before_fix: true
+  backup_dir: /opt/vps-security/backups
+  max_backups: 50
+
+# ===================================
+# SSH SECURITY REQUIREMENTS
+# ===================================
+ssh:
+  config_path: /etc/ssh/sshd_config
+
+  # Required settings for SSH security
+  requirements:
+    PermitRootLogin: "prohibit-password"
+    PasswordAuthentication: "no"
+    PubkeyAuthentication: "yes"
+    PermitEmptyPasswords: "no"
+
+# ===================================
+# FAILED LOGIN DETECTION
+# ===================================
+failed_logins:
+  threshold_per_hour: 10
+  auth_log: /var/log/auth.log
+  check_fail2ban: true
+
+# ===================================
+# SSL CERTIFICATE MONITORING
+# ===================================
+ssl:
+  # CUSTOMIZE: Add your domains to monitor
+  domains:
+    # - app.yourdomain.com
+    # - api.yourdomain.com
+
+  warning_days_before_expiry: 14
+  critical_days_before_expiry: 7
+
+# ===================================
+# FILE PERMISSION REQUIREMENTS
+# ===================================
+file_permissions:
+  env_files:
+    max_mode: "600"
+  project_dirs:
+    max_mode: "755"
+  sensitive_files:
+    - /opt/vps-security/.env
+    - /root/.ssh/authorized_keys
+
+# ===================================
+# SUSPICIOUS ACTIVITY DETECTION
+# ===================================
+suspicious_activity:
+  check_crypto_mining: true
+  cpu_threshold: 90
+
+  suspicious_process_names:
+    - xmrig
+    - minerd
+    - cpuminer
+    - cryptonight
+    - stratum
+
+  suspicious_ports:
+    - 3333
+    - 4444
+    - 5555
+    - 7777
+    - 14444
+
+# ===================================
+# LOGGING SETTINGS
+# ===================================
+logging:
+  file: /opt/vps-security/logs/security.log
+  max_size_mb: 10
+  backup_count: 5
+  level: INFO
+  console: true

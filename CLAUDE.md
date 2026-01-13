@@ -14,13 +14,14 @@ These rules define how we approach every task. Follow this workflow in order.
 |-----------------|:----------:|:---------:|
 | Cloudflare DNS Proxy | ✅ | ❌ |
 | UFW Firewall | ✅ | ❌ |
-| SSH Hardening | ✅ | ❌ |
+| SSH Hardening (Port 22222) | ✅ | ❌ |
 | Fail2ban | ✅ | ❌ |
 | Docker Port Security | ✅ | ✅ |
 | .env File Permissions | ✅ | ✅ |
 | Credential Management | ✅ | ✅ |
 | SSL Certificates | ✅ | ❌ |
 | Git Security (.gitignore) | ✅ | ✅ |
+| Security Monitor + Slack | ✅ | ❌ |
 
 ---
 
@@ -41,6 +42,7 @@ All A/AAAA records MUST have orange cloud (Proxied) enabled.
 | Minimum TLS Version | SSL/TLS → Edge Certificates | TLS 1.2 |
 | Bot Fight Mode | Security → Bots | ON |
 | Security Level | Security → Settings | Medium |
+| Challenge Passage | Security → Settings | 30 minutes |
 | Browser Integrity Check | Security → Settings | ON |
 
 ---
@@ -50,15 +52,21 @@ All A/AAAA records MUST have orange cloud (Proxied) enabled.
 ### Required State
 UFW must be ACTIVE with default deny incoming.
 
-### Setup Commands
+### Check Status
+```bash
+ufw status verbose
+```
+
+### Standard Allowed Ports
 ```bash
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 22/tcp    # SSH (required)
-ufw allow 80/tcp    # HTTP
-ufw allow 443/tcp   # HTTPS
+ufw allow 22222/tcp  # SSH (non-standard port - IMPORTANT!)
+ufw allow 80/tcp     # HTTP
+ufw allow 443/tcp    # HTTPS
+ufw allow 8000/tcp   # App backend (if needed)
+ufw allow 8001/tcp   # Additional services (if needed)
 ufw enable
-ufw status verbose
 ```
 
 ### NEVER Allow These Ports Publicly
@@ -69,12 +77,32 @@ ufw status verbose
 | Redis | 6379 | No auth by default = full access |
 | MongoDB | 27017 | Often misconfigured = data leak |
 
+Database ports should ONLY be accessible via Docker internal networks.
+
 ---
 
 ## 3. SSH HARDENING (VPS Only)
 
-### Configuration File: `/etc/ssh/sshd_config`
+### IMPORTANT: Non-Standard Port
+SSH runs on port **22222** (not default 22) to avoid automated scanners.
+
+### Connect to VPS
 ```bash
+ssh -p 22222 root@YOUR_SERVER_IP
+```
+
+### SSH Config (add to `~/.ssh/config` on your local machine)
+```
+Host myvps
+    HostName YOUR_SERVER_IP
+    Port 22222
+    User root
+```
+Then connect with: `ssh myvps`
+
+### Server Configuration: `/etc/ssh/sshd_config`
+```bash
+Port 22222
 PermitRootLogin prohibit-password    # Key-only root login
 PasswordAuthentication no            # Disable password auth
 PubkeyAuthentication yes             # Enable key-based auth
@@ -83,21 +111,41 @@ LoginGraceTime 60                    # 60 second timeout
 Protocol 2                           # SSH protocol 2 only
 ```
 
-### Apply Changes
+### Systemd Socket Override: `/etc/systemd/system/ssh.socket.d/override.conf`
+```ini
+[Socket]
+ListenStream=
+ListenStream=0.0.0.0:22222
+ListenStream=[::]:22222
+```
+
+### Apply SSH Changes
 ```bash
-sudo systemctl restart ssh
+systemctl daemon-reload
+systemctl restart ssh.socket
 ```
 
 **WARNING**: Always test SSH key login in a NEW terminal before disabling passwords!
 
 ---
 
-## 4. FAIL2BAN (VPS Only)
+## 4. FAIL2BAN - Aggressive Settings (VPS Only)
 
-### Installation
-```bash
-apt install -y fail2ban
-systemctl enable --now fail2ban
+### Configuration: `/etc/fail2ban/jail.local`
+```ini
+[DEFAULT]
+bantime = 24h       # 24 hour ban (aggressive)
+findtime = 10m      # 10 minute window
+maxretry = 3        # Only 3 attempts allowed
+
+[sshd]
+enabled = true
+port = 22222        # Match your SSH port!
+filter = sshd
+logpath = /var/log/auth.log
+backend = systemd
+maxretry = 3
+bantime = 24h
 ```
 
 ### Useful Commands
@@ -108,21 +156,8 @@ fail2ban-client status sshd
 # View banned IPs
 fail2ban-client status sshd | grep "Banned IP"
 
-# Unban an IP (if needed)
+# Unban an IP (if you lock yourself out)
 fail2ban-client set sshd unbanip <IP_ADDRESS>
-```
-
-### Custom Configuration
-Create `/etc/fail2ban/jail.local`:
-```ini
-[sshd]
-enabled = true
-port = 22
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 3
-bantime = 3600      # 1 hour ban
-findtime = 600      # 10 minute window
 ```
 
 ---
@@ -166,7 +201,58 @@ If this returns anything, you have exposed database ports. **FIX IMMEDIATELY**.
 
 ---
 
-## 6. FILE PERMISSIONS (VPS + Local)
+## 6. AUTOMATED SECURITY MONITORING + SLACK ALERTS (VPS Only)
+
+### Team Slack Webhook
+All security alerts go to our team Slack channel:
+```
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
+```
+
+### Setup Location
+`/opt/vps-security/`
+
+### Schedule
+Every 6 hours via systemd timer
+
+### Configuration File: `/opt/vps-security/.env`
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
+```
+
+### What It Monitors
+| Check | Auto-Fix? | Description |
+|-------|-----------|-------------|
+| Database Ports | Alert | PostgreSQL, MySQL, Redis exposure |
+| UFW Firewall | Yes | Enables if disabled |
+| SSH Security | Alert | Config verification |
+| Failed Logins | Alert | Brute force detection |
+| Suspicious Activity | Alert | Crypto miners, unusual processes |
+| File Permissions | Yes | Fixes .env to 600 |
+| Package Updates | Alert | Security updates available |
+| SSL Certificates | Alert | Expiration warnings |
+
+### Manual Security Scan
+```bash
+ssh -p 22222 root@YOUR_SERVER_IP
+cd /opt/vps-security
+source .env
+python3 vps_security.py --verbose
+```
+
+### Check Timer Status
+```bash
+systemctl list-timers | grep vps-security
+```
+
+### View Security Logs
+```bash
+tail -100 /opt/vps-security/logs/security.log
+```
+
+---
+
+## 7. FILE PERMISSIONS (VPS + Local)
 
 ### .env Files (contain secrets)
 ```bash
@@ -195,7 +281,7 @@ credentials.json
 
 ---
 
-## 7. CREDENTIAL MANAGEMENT (VPS + Local)
+## 8. CREDENTIAL MANAGEMENT (VPS + Local)
 
 ### Rules
 - **NEVER** use defaults: `postgres`, `root`, `password`, `admin`, `123456`
@@ -207,23 +293,16 @@ credentials.json
 openssl rand -base64 32 | tr -d '/+=' | head -c 32
 ```
 
-### .env File Format
-```bash
-DB_PASSWORD=your_generated_password_here
-API_KEY=your_api_key_here
-SECRET_KEY=your_secret_key_here
-```
-
 ---
 
-## 8. SSL CERTIFICATES (VPS Only)
+## 9. SSL CERTIFICATES (VPS Only)
 
 ### Check Expiration
 ```bash
 echo | openssl s_client -servername yourdomain.com -connect yourdomain.com:443 2>/dev/null | openssl x509 -noout -dates
 ```
 
-### Let's Encrypt Auto-Renewal
+### Let's Encrypt Renewal
 ```bash
 certbot renew --dry-run    # Test
 certbot renew              # Actually renew
@@ -236,7 +315,7 @@ systemctl list-timers | grep certbot
 
 ---
 
-## 9. SYSTEM UPDATES (VPS Only)
+## 10. SYSTEM UPDATES (VPS Only)
 
 ### Check Available Updates
 ```bash
@@ -244,9 +323,14 @@ apt update
 apt list --upgradable
 ```
 
-### Apply Security Updates
+### Apply All Updates
 ```bash
-apt upgrade -y --only-upgrade
+apt update && DEBIAN_FRONTEND=noninteractive apt upgrade -y
+```
+
+### Reboot if Kernel Updated
+```bash
+reboot
 ```
 
 ### Enable Automatic Security Updates
@@ -257,7 +341,22 @@ dpkg-reconfigure -plow unattended-upgrades
 
 ---
 
-## 10. INCIDENT RESPONSE
+## 11. QUICK COMMANDS REFERENCE
+
+| Action | Command |
+|--------|---------|
+| Connect to VPS | `ssh -p 22222 root@YOUR_SERVER_IP` |
+| Check firewall | `ufw status` |
+| Check fail2ban | `fail2ban-client status sshd` |
+| Run security scan | `cd /opt/vps-security && source .env && python3 vps_security.py --verbose` |
+| View banned IPs | `fail2ban-client status sshd` |
+| Check Docker ports | `docker ps --format '{{.Names}} {{.Ports}}'` |
+| Check SSL cert | `openssl s_client -connect domain.com:443 2>/dev/null \| openssl x509 -noout -dates` |
+| View security logs | `tail -50 /opt/vps-security/logs/security.log` |
+
+---
+
+## 12. INCIDENT RESPONSE
 
 ### If You Suspect a Breach
 
@@ -287,50 +386,49 @@ crontab -l                                 # Scheduled tasks
 - Revoke and regenerate API keys
 - Check for backdoors (new users, cron jobs, SSH keys)
 - Consider rebuilding from clean image
+- **Alert the team via Slack**
 
 ---
 
-## 11. MONTHLY SECURITY CHECKLIST
+## 13. MONTHLY SECURITY CHECKLIST
 
 Run this checklist monthly on all VPS servers:
 
 - [ ] Cloudflare proxy enabled (orange cloud) for all domains
 - [ ] UFW active: `ufw status` shows "Status: active"
+- [ ] SSH on port 22222 (not default 22)
 - [ ] No database ports exposed: `docker ps` shows no 5432/3306/6379 on 0.0.0.0
-- [ ] fail2ban running: `systemctl status fail2ban`
+- [ ] fail2ban running with 24h ban: `fail2ban-client status sshd`
 - [ ] SSH key-only: `grep PasswordAuthentication /etc/ssh/sshd_config` shows "no"
 - [ ] .env files secured: `ls -la .env` shows "-rw-------"
 - [ ] SSL certs valid: Check expiration dates
 - [ ] Security updates applied: `apt update && apt list --upgradable`
-- [ ] No suspicious processes: `top` shows normal CPU usage
-- [ ] Backups working: Verify recent backup exists
+- [ ] Security monitor running: `systemctl list-timers | grep vps-security`
+- [ ] Slack alerts working: Check recent alerts in channel
 
 ---
 
-## 12. EMERGENCY COMMANDS
+## 14. EMERGENCY COMMANDS
 
 ### If Locked Out of SSH
 Use DigitalOcean Console: Droplet → Access → Launch Console
 
-### Useful Commands
+### Emergency: Block All Traffic Except SSH
 ```bash
-# View all listening ports
-ss -tulpn
-
-# View firewall rules
-ufw status numbered
-
-# View Docker networks
-docker network ls
-
-# View container logs
-docker logs <container_name> --tail 100
-
-# Emergency: Block all traffic except SSH
 ufw reset
 ufw default deny incoming
-ufw allow 22/tcp
+ufw allow 22222/tcp
 ufw enable
+```
+
+### View All Listening Ports
+```bash
+ss -tulpn
+```
+
+### View Firewall Rules
+```bash
+ufw status numbered
 ```
 
 ---
@@ -351,6 +449,9 @@ grep ".env" .gitignore
 # 3. Check no secrets in code
 grep -r "password\|api_key\|secret" --include="*.py" --include="*.js" --include="*.ts" .
 # Review any matches - should be env variable references only
+
+# 4. Verify SSH uses port 22222
+grep "Port 22222" /etc/ssh/sshd_config
 ```
 
 

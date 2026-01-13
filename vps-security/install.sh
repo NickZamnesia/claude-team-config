@@ -62,7 +62,7 @@ else
     cat > "${INSTALL_DIR}/.env" << 'EOF'
 # VPS Security Monitor - Environment Variables
 # This Slack webhook is shared across all Just Amazing VPS servers
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
+SLACK_WEBHOOK_URL=YOUR_SLACK_WEBHOOK_URL
 EOF
     chmod 600 "${INSTALL_DIR}/.env"
     echo "  Created .env with Slack webhook"

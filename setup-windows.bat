@@ -175,6 +175,19 @@ if "%PROJECT_PATH%"=="" (
 )
 
 echo.
+echo  Slack webhook URL is needed for security alerts.
+echo  Ask Nick for the team webhook URL, or create your own at:
+echo  https://api.slack.com/apps
+echo.
+set /p SLACK_WEBHOOK="  Enter Slack webhook URL: "
+
+if "%SLACK_WEBHOOK%"=="" (
+    echo.
+    echo  WARNING: No webhook provided. Slack alerts will not work.
+    set SLACK_WEBHOOK=YOUR_SLACK_WEBHOOK_URL
+)
+
+echo.
 echo  ============================================
 echo   Deploying Security Scanner to %VPS_IP%
 echo  ============================================
@@ -246,8 +259,8 @@ echo         Files copied!
 echo.
 echo  [4/6] Running installer on VPS...
 
-:: Run installer and configure
-ssh -p %SSH_PORT% root@%VPS_IP% "cd /tmp/vps-security-setup && chmod +x install.sh && ./install.sh" 2>&1
+:: Run installer with Slack webhook
+ssh -p %SSH_PORT% root@%VPS_IP% "cd /tmp/vps-security-setup && chmod +x install.sh && SLACK_WEBHOOK_URL='%SLACK_WEBHOOK%' ./install.sh" 2>&1
 
 echo.
 echo  [5/6] Configuring for your project...

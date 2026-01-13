@@ -206,7 +206,7 @@ If this returns anything, you have exposed database ports. **FIX IMMEDIATELY**.
 ### Team Slack Webhook
 All security alerts go to our team Slack channel:
 ```
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
+SLACK_WEBHOOK_URL=YOUR_SLACK_WEBHOOK_URL
 ```
 
 ### Setup Location
@@ -217,7 +217,7 @@ Every 6 hours via systemd timer
 
 ### Configuration File: `/opt/vps-security/.env`
 ```bash
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
+SLACK_WEBHOOK_URL=YOUR_SLACK_WEBHOOK_URL
 ```
 
 ### What It Monitors

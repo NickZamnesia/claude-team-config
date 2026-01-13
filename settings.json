@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "MANDATORY DOCUMENTATION CHECK: Before responding, you MUST check if there is a CLAUDE.md file in the current working directory. If it exists, read it and fill in the ACTIVE SESSION section (Date, Working On, Changes Made counter). After EVERY change you make, update the 'Changes Made' counter and add an entry to 'Changes This Session' table. This is NON-NEGOTIABLE - failure to track changes makes project history unusable."
+          }
+        ]
+      }
+    ]
+  }
+}

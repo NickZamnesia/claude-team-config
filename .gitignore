@@ -1,0 +1,10 @@
+# Personal/local files
+*.local.md
+CLAUDE.local.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.backup

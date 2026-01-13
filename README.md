@@ -1,111 +1,108 @@
-# Claude Code Team Configuration
+# Claude Team Config - Just Amazing
 
-Shared Claude Code configuration for the Just Amazing team. This ensures consistent documentation practices and work standards across all team members.
+Shared Claude Code configuration for the Just Amazing team. Ensures consistent coding standards, security practices, and documentation across all projects.
 
-## What's Included
+## Quick Setup (One Click)
 
-| File | Purpose |
-|------|---------|
-| `settings.json` | Hooks that enforce documentation (auto-injected on every prompt) |
-| `CLAUDE.md` | Team work standards (security, testing, documentation) |
-| `rules/agents.md` | Multi-agent framework for product development |
+### Windows
+1. **[Download setup-windows.bat](https://github.com/NickZamnesia/claude-team-config/raw/master/setup-windows.bat)**
+2. Double-click the downloaded file
+3. Done! ✅
 
-## What's NOT Included
+### Mac
+1. **[Download setup-mac.command](https://github.com/NickZamnesia/claude-team-config/raw/master/setup-mac.command)**
+2. Double-click the downloaded file
+3. If blocked: Right-click → Open → Open
+4. Done! ✅
 
-- **Project CLAUDE.md files** - These stay in each project and are personal/project-specific
-- **Personal plugins** - Your enabled plugins are preserved during sync
+---
 
-## Setup (First Time)
+## What Gets Installed
 
-### Step 1: Clone this repository
+| Component | Description |
+|-----------|-------------|
+| `settings.json` | Team hooks and recommended plugins |
+| `CLAUDE.md` | Coding standards, VPS security, workflows |
+| `rules/agents.md` | Multi-agent product development framework |
+| Auto-update | Weekly check for configuration updates (Mondays 9 AM) |
 
-```powershell
-# If using git
-git clone https://github.com/YourOrg/claude-team-config.git
-cd claude-team-config
+---
 
-# Or if using OneDrive shared folder, just navigate to it
-cd "OneDrive - Just Amazing\Shared\claude-team-config"
+## Features
+
+### 🔒 VPS Security Guidelines
+- Firewall configuration (UFW)
+- Database port security
+- SSH protection (fail2ban)
+- Credential management
+
+### 📝 Documentation Enforcement
+- Automatic reminders to update project logs
+- Active Session tracking
+- Change logging requirements
+
+### 🔧 Team Plugins
+- `frontend-design` - UI/frontend development
+- `figma` - Design integration
+- `laravel-boost` - Laravel development
+
+### 🔄 Auto-Updates
+Configuration automatically stays in sync with team standards.
+
+---
+
+## Manual Update
+
+If you need to manually sync your configuration:
+
+**Windows:**
+- Double-click "Update Claude Config" on your desktop
+- Or run: `powershell -ExecutionPolicy Bypass -File ~/.claude/sync-claude-config.ps1`
+
+**Mac:**
+- Run in Terminal: `update-claude-config`
+- Or: `cd ~/.claude && ./sync-claude-config.sh`
+
+---
+
+## File Structure
+
+```
+~/.claude/
+├── settings.json          # Hooks, plugins configuration
+├── CLAUDE.md              # Team standards and guidelines
+├── rules/
+│   └── agents.md          # Multi-agent framework
+├── sync-claude-config.ps1 # Windows sync script
+└── sync-claude-config.sh  # Mac/Linux sync script
 ```
 
-### Step 2: Run the sync script
-
-```powershell
-# Preview what will change (dry run)
-.\sync-claude-config.ps1 -DryRun
-
-# Actually sync
-.\sync-claude-config.ps1
-```
-
-### Step 3: Restart Claude Code
-
-Close and reopen any Claude Code sessions to pick up the new hooks.
-
-## Updating
-
-When the team config is updated:
-
-```powershell
-# If using git
-cd claude-team-config
-git pull
-
-# Then run sync
-.\sync-claude-config.ps1
-```
-
-If using OneDrive, files sync automatically. Just run the sync script when notified of updates.
-
-## How the Documentation Enforcement Works
-
-The `settings.json` contains a hook that runs on **every message** you send to Claude Code:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [{
-      "matcher": "",
-      "hooks": [{
-        "type": "prompt",
-        "prompt": "MANDATORY DOCUMENTATION CHECK: Before responding, you MUST check if there is a CLAUDE.md file..."
-      }]
-    }]
-  }
-}
-```
-
-This ensures Claude:
-1. Checks for a project CLAUDE.md on every conversation
-2. Fills in the ACTIVE SESSION section before working
-3. Updates the "Changes Made" counter after each change
-4. Logs changes to the "Changes This Session" table
-
-## Creating Project CLAUDE.md Files
-
-When starting a new project, create a `CLAUDE.md` in the project root using the template from the team `CLAUDE.md` file. The template includes:
-
-- Active Session tracking (date, task, change counter)
-- Changes This Session table
-- Detailed Change Log section
-- End of Session checklist
+---
 
 ## Troubleshooting
 
-### Hooks not working?
-1. Make sure `~/.claude/settings.json` exists and contains the hooks
-2. Restart Claude Code completely (close all sessions)
-3. Run `.\sync-claude-config.ps1` again
+### Windows: "Windows protected your PC"
+Click "More info" → "Run anyway"
 
-### Lost personal settings?
-Your original config is backed up at `~/.claude-backup/` (created on first sync).
+### Mac: "Cannot be opened because it is from an unidentified developer"
+Right-click the file → Open → Open
 
-### Merge conflicts?
-The sync script preserves your personal `enabledPlugins`. If you have custom hooks, they may be overwritten - back them up first.
+### Mac: "Permission denied"
+```bash
+chmod +x ~/Downloads/setup-mac.command
+```
+
+---
 
 ## Contributing
 
-To update team standards:
-1. Edit the files in this repository
-2. Commit and push (or just save if using OneDrive)
-3. Notify team to run sync script
+To update team configuration:
+1. Edit files in this repository
+2. Commit and push changes
+3. Team members will receive updates automatically on Monday
+
+---
+
+## Support
+
+Contact the team lead if you have any issues with the setup or configuration.

@@ -58,11 +58,24 @@ echo -e "${YELLOW}[3/8] Configuring Slack webhook...${NC}"
 if [ -f "${INSTALL_DIR}/.env" ]; then
     echo "  .env file already exists, keeping existing configuration"
 else
-    # Pre-configured Slack webhook for Just Amazing team
-    cat > "${INSTALL_DIR}/.env" << 'EOF'
+    # Check if SLACK_WEBHOOK_URL is passed as environment variable
+    if [ -z "$SLACK_WEBHOOK_URL" ]; then
+        echo ""
+        echo -e "${YELLOW}  Slack webhook URL is required for security alerts.${NC}"
+        echo "  Get it from: https://api.slack.com/apps → Your App → Incoming Webhooks"
+        echo ""
+        read -p "  Enter Slack webhook URL: " SLACK_WEBHOOK_URL
+    fi
+
+    if [ -z "$SLACK_WEBHOOK_URL" ]; then
+        echo -e "${RED}  WARNING: No webhook URL provided. Slack notifications will not work.${NC}"
+        SLACK_WEBHOOK_URL="YOUR_SLACK_WEBHOOK_URL"
+    fi
+
+    cat > "${INSTALL_DIR}/.env" << EOF
 # VPS Security Monitor - Environment Variables
-# This Slack webhook is shared across all Just Amazing VPS servers
-SLACK_WEBHOOK_URL=YOUR_SLACK_WEBHOOK_URL
+# Get webhook URL from: https://api.slack.com/apps
+SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL
 EOF
     chmod 600 "${INSTALL_DIR}/.env"
     echo "  Created .env with Slack webhook"

@@ -1,12 +1,17 @@
 {
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "figma@claude-plugins-official": true,
+    "laravel-boost@claude-plugins-official": true
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
         "matcher": "",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "MANDATORY DOCUMENTATION CHECK: Before responding, you MUST check if there is a CLAUDE.md file in the current working directory. If it exists, read it and fill in the ACTIVE SESSION section (Date, Working On, Changes Made counter). After EVERY change you make, update the 'Changes Made' counter and add an entry to 'Changes This Session' table. This is NON-NEGOTIABLE - failure to track changes makes project history unusable."
+            "type": "command",
+            "command": "powershell -Command \"if (Test-Path CLAUDE.md) { Write-Host '[CLAUDE.md found] Remember: Update Active Session tracking after each change' } else { Write-Host '[No CLAUDE.md in this directory]' }\""
           }
         ]
       }

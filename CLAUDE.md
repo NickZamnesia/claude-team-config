@@ -112,6 +112,68 @@ Before responding to the user's first message:
 
 ---
 
+
+---
+
+## Claude Code Configuration
+
+### Hooks (Automatic Reminders)
+
+Hooks ensure Claude follows protocols automatically. The team uses a **command-based hook** that:
+- Checks if CLAUDE.md exists before reminding
+- Reminds to update Active Session tracking after each change
+- Fails gracefully if no CLAUDE.md is present
+
+#### Platform-Specific Hook Commands
+
+**Windows (PowerShell)**:
+```json
+{
+  "type": "command",
+  "command": "powershell -Command \"if (Test-Path CLAUDE.md) { Write-Host '[CLAUDE.md found] Remember: Update Active Session tracking after each change' } else { Write-Host '[No CLAUDE.md in this directory]' }\""
+}
+```
+
+**Mac/Linux (Bash)**:
+```json
+{
+  "type": "command",
+  "command": "if [ -f CLAUDE.md ]; then echo '[CLAUDE.md found] Remember: Update Active Session tracking after each change'; else echo '[No CLAUDE.md in this directory]'; fi"
+}
+```
+
+#### Hook Types
+| Type | Reliability | Use Case |
+|------|-------------|----------|
+| `command` | **High** - Actually executes and verifies | Checking file existence, validation |
+| `prompt` | Medium - Adds to context but no verification | Simple reminders |
+
+#### Troubleshooting Hooks
+If hooks break your settings.json:
+1. Check for JSON syntax errors (missing commas, brackets)
+2. Escape special characters in commands (especially quotes)
+3. Test command manually in terminal first
+4. Backup settings.json before modifying hooks
+
+### Team Plugins
+The following plugins are enabled for the team:
+- **frontend-design** - UI/frontend development assistance
+- **figma** - Figma design integration
+- **laravel-boost** - Laravel development enhancement
+
+### Optional Settings
+These settings are personal preference (not enforced):
+- `alwaysThinkingEnabled` - Enable extended reasoning mode
+
+### Sync Script
+Run `sync-claude-config.ps1` to pull latest team settings:
+```powershell
+.\sync-claude-config.ps1
+```
+This will update your local ~/.claude/ with team configurations.
+
+---
+
 ## Phase 1: Before Starting Work
 
 ### Problem-Solving Approach

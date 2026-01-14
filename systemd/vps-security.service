@@ -1,0 +1,35 @@
+[Unit]
+Description=VPS Security Monitor
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Run as root (required for security checks)
+User=root
+Group=root
+
+# Working directory
+WorkingDirectory=/opt/vps-security
+
+# Main script
+ExecStart=/usr/bin/python3 /opt/vps-security/vps_security.py
+
+# Environment file with Slack webhook URL
+EnvironmentFile=/opt/vps-security/.env
+
+# Timeout (5 minutes should be enough for all checks)
+TimeoutStartSec=300
+
+# Logging
+StandardOutput=append:/opt/vps-security/logs/security.log
+StandardError=append:/opt/vps-security/logs/security.log
+
+# Security hardening (even for a security tool)
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

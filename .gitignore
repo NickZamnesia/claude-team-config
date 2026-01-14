@@ -1,0 +1,29 @@
+# Environment files with secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Logs and backups (these are generated on the VPS)
+logs/
+backups/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+tmpclaude-*
+
+# Claude Code project files
+CLAUDE.md

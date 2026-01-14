@@ -1,0 +1,195 @@
+# VPS Security Monitor Configuration
+# ===================================
+# This file configures all security checks and remediation settings.
+# Modify according to your VPS setup.
+
+version: "1.0"
+
+# ===================================
+# NOTIFICATION SETTINGS
+# ===================================
+notifications:
+  slack:
+    enabled: true
+    # Set via environment variable SLACK_WEBHOOK_URL
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    # Optional: mention on critical issues
+    mention_on_critical: "<!channel>"
+    # Include server hostname in notifications
+    include_hostname: true
+
+# ===================================
+# PROJECT DIRECTORIES TO MONITOR
+# ===================================
+# Add all your projects here. Each project can have its own
+# allowed ports and database type for targeted monitoring.
+
+projects:
+  - name: redirect-mapper
+    path: /opt/redirect-mapper
+    docker_compose: /opt/redirect-mapper/docker-compose.yml
+    allowed_ports: [8001]
+    database_type: postgresql
+
+  - name: structured-data-tool
+    path: /opt/structured-data-creation-tool
+    docker_compose: /opt/structured-data-creation-tool/docker-compose.yml
+    allowed_ports: [8085]
+    database_type: mysql
+
+# ===================================
+# FIREWALL SETTINGS
+# ===================================
+firewall:
+  # UFW must be active
+  required_status: active
+
+  # Only these ports should be allowed through the firewall
+  allowed_ports:
+    - 22    # SSH
+    - 80    # HTTP
+    - 443   # HTTPS
+    - 8001  # redirect-mapper
+    - 8085  # structured-data-tool
+
+  # Ports that should NEVER be exposed to the internet
+  dangerous_ports:
+    - 5432  # PostgreSQL
+    - 3306  # MySQL
+    - 3307  # MySQL alternate
+    - 6379  # Redis
+    - 6380  # Redis alternate
+    - 27017 # MongoDB
+    - 9200  # Elasticsearch
+
+# ===================================
+# AUTO-REMEDIATION SETTINGS
+# ===================================
+# Conservative mode: only auto-fix safe issues
+remediation:
+  enabled: true
+
+  # Issues that will be automatically fixed
+  auto_fix:
+    - firewall_disabled      # Enable UFW if disabled
+    - firewall_missing_rules # Add missing port rules
+    - file_permissions       # Fix .env files to 600
+
+  # Issues that will ONLY generate alerts (never auto-fix)
+  alert_only:
+    - exposed_database_ports # Requires docker-compose change
+    - ssh_config            # Requires sshd restart
+    - package_updates       # May break applications
+    - suspicious_processes  # May be legitimate
+    - ssl_expiring          # Manual renewal needed
+
+  # Always backup before making changes
+  backup_before_fix: true
+  backup_dir: /opt/vps-security/backups
+
+  # Maximum backups to keep
+  max_backups: 50
+
+# ===================================
+# SSH SECURITY REQUIREMENTS
+# ===================================
+ssh:
+  config_path: /etc/ssh/sshd_config
+
+  # These settings should be in sshd_config
+  requirements:
+    PermitRootLogin: "prohibit-password"  # or "no"
+    PasswordAuthentication: "no"
+    PubkeyAuthentication: "yes"
+    PermitEmptyPasswords: "no"
+
+# ===================================
+# FAILED LOGIN DETECTION
+# ===================================
+failed_logins:
+  # Alert if more than this many failed logins per hour
+  threshold_per_hour: 10
+
+  # Auth log location
+  auth_log: /var/log/auth.log
+
+  # Check if fail2ban is running
+  check_fail2ban: true
+
+# ===================================
+# SSL CERTIFICATE MONITORING
+# ===================================
+ssl:
+  # Domains to monitor for SSL expiration
+  domains:
+    - redirect.justamazinghub.com
+    - schema.justamazinghub.com
+    - translate.justamazinghub.com
+
+  # Warning threshold (days before expiry)
+  warning_days_before_expiry: 14
+
+  # Critical threshold (days before expiry)
+  critical_days_before_expiry: 7
+
+# ===================================
+# FILE PERMISSION REQUIREMENTS
+# ===================================
+file_permissions:
+  # .env files should be readable only by owner
+  env_files:
+    max_mode: "600"
+
+  # Project directories
+  project_dirs:
+    max_mode: "755"
+
+  # Additional sensitive files to check
+  sensitive_files:
+    - /opt/vps-security/.env
+    - /root/.ssh/authorized_keys
+
+# ===================================
+# SUSPICIOUS ACTIVITY DETECTION
+# ===================================
+suspicious_activity:
+  # Check for crypto mining indicators
+  check_crypto_mining: true
+
+  # High CPU threshold (percentage)
+  cpu_threshold: 90
+
+  # Known suspicious process names
+  suspicious_process_names:
+    - xmrig
+    - minerd
+    - cpuminer
+    - cryptonight
+    - stratum
+
+  # Suspicious outbound ports (crypto mining pools)
+  suspicious_ports:
+    - 3333   # Common mining pool port
+    - 4444   # Common mining pool port
+    - 5555   # Common mining pool port
+    - 7777   # Common mining pool port
+    - 14444  # Common mining pool port
+
+# ===================================
+# LOGGING SETTINGS
+# ===================================
+logging:
+  # Log file location
+  file: /opt/vps-security/logs/security.log
+
+  # Maximum log file size in MB
+  max_size_mb: 10
+
+  # Number of backup logs to keep
+  backup_count: 5
+
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: INFO
+
+  # Also log to console when running manually
+  console: true

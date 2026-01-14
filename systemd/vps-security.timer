@@ -1,0 +1,18 @@
+[Unit]
+Description=Run VPS Security Monitor every 6 hours
+
+[Timer]
+# Run 5 minutes after boot
+OnBootSec=5min
+
+# Then every 6 hours
+OnUnitActiveSec=6h
+
+# Persist timer across reboots
+Persistent=true
+
+# Add some randomness to avoid exact timing (±15 min)
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

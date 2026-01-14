@@ -74,11 +74,11 @@ remediation:
     - firewall_disabled      # Enable UFW if disabled
     - firewall_missing_rules # Add missing port rules
     - file_permissions       # Fix .env files to 600
+    - ssh_config             # Fix SSH security settings
 
   # Issues that will ONLY generate alerts (never auto-fix)
   alert_only:
     - exposed_database_ports # Requires docker-compose change
-    - ssh_config            # Requires sshd restart
     - package_updates       # May break applications
     - suspicious_processes  # May be legitimate
     - ssl_expiring          # Manual renewal needed

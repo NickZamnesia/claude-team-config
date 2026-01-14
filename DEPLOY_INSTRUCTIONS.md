@@ -11,139 +11,62 @@ This is a security guard for your VPS server. It automatically:
 
 ---
 
-## Before You Start
-
-You'll need:
-- [ ] Access to your VPS (the IP address and ability to SSH in)
-- [ ] Your Slack webhook URL (ask Nick if you don't have it)
-
----
-
-## Installation (10 minutes)
+## Installation (2 minutes)
 
 ### Step 1: Connect to Your VPS
 
-Open your terminal (Mac/Linux) or PowerShell (Windows) and connect:
+Open your terminal and type (replace YOUR_VPS_IP with your server's IP address):
 
-```bash
+```
 ssh root@YOUR_VPS_IP
 ```
 
-Replace `YOUR_VPS_IP` with your actual server IP (like `165.232.95.6`).
+Press Enter. Type your password if asked.
 
-You'll be asked for your password or it will use your SSH key.
-
-**You're now connected when you see something like:** `root@your-server:~#`
+**You're connected when you see:** `root@something:~#`
 
 ---
 
-### Step 2: Download the Security Tool
+### Step 2: Install Everything
 
-Copy and paste this entire command (it's one line):
+Copy this ENTIRE block (all 3 lines), paste it, and press Enter:
 
 ```bash
-git clone https://github.com/NickZamnesia/vps-security.git /opt/vps-security
+git clone https://github.com/NickZamnesia/claude-team-config.git /tmp/setup && cd /tmp/setup/vps-security && chmod +x install.sh && ./install.sh
 ```
 
-**What this does:** Downloads all the security files to your server.
+The installer will ask for a Slack webhook URL. Paste this:
 
-**You'll see something like:**
 ```
-Cloning into '/opt/vps-security'...
-remote: Enumerating objects: 42, done.
-...
+https://hooks.slack.com/services/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
 ```
 
 ---
 
-### Step 3: Run the Installer
+### Step 3: Add Your Project
 
-Copy and paste these commands one at a time:
-
-```bash
-cd /opt/vps-security
-```
-
-```bash
-chmod +x install.sh
-```
-
-```bash
-./install.sh
-```
-
-**What these do:**
-1. Go into the security folder
-2. Make the installer runnable
-3. Run the installer
-
----
-
-### Step 4: Enter Your Slack Webhook
-
-The installer will ask for your Slack webhook URL:
-
-```
-Enter Slack webhook URL:
-```
-
-Paste the webhook URL and press Enter.
-
-**Don't have the webhook?** Ask Nick or check the team Slack channel description.
-
----
-
-### Step 5: Configure Your Projects
-
-The installer will finish and show "Installation Complete!"
-
-Now you need to tell it about YOUR projects. Open the config file:
-
-```bash
-nano /opt/vps-security/config.yaml
-```
-
-Find the `projects:` section and change it to match your setup:
+The installer asks you to edit the config. When the editor opens, find `projects:` and change it to YOUR project:
 
 ```yaml
 projects:
-  - name: my-project-name
-    path: /opt/my-project
-    docker_compose: /opt/my-project/docker-compose.yml
+  - name: my-app
+    path: /opt/my-app
+    docker_compose: /opt/my-app/docker-compose.yml
     allowed_ports: [8001]
     database_type: postgresql
 ```
 
-**Change these values:**
-- `name`: Whatever you want to call your project
-- `path`: Where your project files are (usually `/opt/something`)
-- `allowed_ports`: What port your app runs on
-- `database_type`: `postgresql`, `mysql`, or `mongodb`
-
-**To save and exit nano:**
-1. Press `Ctrl + X`
-2. Press `Y` (yes, save)
-3. Press `Enter`
+**To save:** Press `Ctrl + X`, then `Y`, then `Enter`
 
 ---
 
-### Step 6: Test It Works
-
-Run a manual security scan:
-
-```bash
-python3 /opt/vps-security/vps_security.py --verbose
-```
-
-You should see output showing what it checked. If everything is secure, great! If there are warnings, they'll be shown.
-
-**Test Slack notifications:**
+### Step 4: Test It
 
 ```bash
 python3 /opt/vps-security/vps_security.py --test-slack
 ```
 
-Check your Slack - you should receive a test message.
+Check Slack - you should get a test message.
 
 ---
 

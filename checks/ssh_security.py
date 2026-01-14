@@ -64,13 +64,9 @@ class SSHSecurityCheck(BaseCheck):
                 check_name=self.name,
                 severity=severity,
                 message=f"SSH security issues found: {len(issues)}",
-                details=[
-                    *issues,
-                    "",
-                    "To fix, edit /etc/ssh/sshd_config and run: systemctl restart sshd"
-                ],
-                auto_fixable=False,  # Too risky to auto-fix SSH
-                fix_action="manual_ssh_config"
+                details=issues,
+                auto_fixable=True,
+                fix_action="fix_ssh_config"
             )
 
         return self._ok_result(

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class SlackNotifier:
-    """Send security scan results to Slack."""
+    """Send security scan results to Slack (supports multiple webhooks)."""
 
     def __init__(self, config: dict):
         """Initialize Slack notifier.
@@ -22,16 +22,38 @@ class SlackNotifier:
         self.config = config
         slack_config = config.get('notifications', {}).get('slack', {})
 
-        # Get webhook URL from config or environment
-        self.webhook_url = slack_config.get('webhook_url', '')
-        if self.webhook_url.startswith('${') and self.webhook_url.endswith('}'):
-            # Environment variable reference
-            env_var = self.webhook_url[2:-1]
-            self.webhook_url = os.environ.get(env_var, '')
+        # Support multiple webhook URLs
+        self.webhook_urls = []
 
-        self.enabled = slack_config.get('enabled', True) and bool(self.webhook_url)
+        # Check for single webhook (backward compatible)
+        single_url = slack_config.get('webhook_url', '')
+        if single_url.startswith('${') and single_url.endswith('}'):
+            env_var = single_url[2:-1]
+            single_url = os.environ.get(env_var, '')
+        if single_url:
+            self.webhook_urls.append(single_url)
+
+        # Check for multiple webhooks from environment
+        # SLACK_WEBHOOK_URL_1, SLACK_WEBHOOK_URL_2, etc.
+        for i in range(1, 10):
+            env_url = os.environ.get(f'SLACK_WEBHOOK_URL_{i}', '')
+            if env_url and env_url not in self.webhook_urls:
+                self.webhook_urls.append(env_url)
+
+        # Also check SLACK_WEBHOOK_URLS (comma-separated)
+        multi_urls = os.environ.get('SLACK_WEBHOOK_URLS', '')
+        if multi_urls:
+            for url in multi_urls.split(','):
+                url = url.strip()
+                if url and url not in self.webhook_urls:
+                    self.webhook_urls.append(url)
+
+        self.enabled = slack_config.get('enabled', True) and len(self.webhook_urls) > 0
         self.mention_on_critical = slack_config.get('mention_on_critical', '')
         self.include_hostname = slack_config.get('include_hostname', True)
+
+        if self.webhook_urls:
+            logger.info(f"Slack configured with {len(self.webhook_urls)} webhook(s)")
 
     def send_summary(self, auto_fixed: List[Tuple], alerts: List,
                      all_ok: bool = False) -> bool:
@@ -43,15 +65,16 @@ class SlackNotifier:
             all_ok: Whether all checks passed
 
         Returns:
-            True if sent successfully
+            True if sent to at least one webhook successfully
         """
         if not self.enabled:
+            print("Slack notifications disabled (no webhook URL)")
             logger.warning("Slack notifications disabled (no webhook URL)")
             return False
 
         try:
             blocks = self._build_message_blocks(auto_fixed, alerts, all_ok)
-            return self._send_blocks(blocks)
+            return self._send_to_all_webhooks(blocks)
         except Exception as e:
             logger.error(f"Failed to send Slack notification: {e}")
             return False
@@ -60,9 +83,10 @@ class SlackNotifier:
         """Send a test message to verify Slack integration.
 
         Returns:
-            True if sent successfully
+            True if sent to at least one webhook successfully
         """
         if not self.enabled:
+            print("Slack notifications disabled (no webhook URL)")
             logger.warning("Slack notifications disabled (no webhook URL)")
             return False
 
@@ -80,13 +104,48 @@ class SlackNotifier:
                     "type": "mrkdwn",
                     "text": f"*Test notification from VPS Security Monitor*\n\n"
                             f"Host: `{self._get_hostname()}`\n"
-                            f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                            f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                            f"Webhooks configured: {len(self.webhook_urls)}\n\n"
                             f"If you see this message, Slack notifications are working correctly."
                 }
             }
         ]
 
-        return self._send_blocks(blocks)
+        return self._send_to_all_webhooks(blocks)
+
+    def _send_to_all_webhooks(self, blocks: List[dict]) -> bool:
+        """Send blocks to all configured Slack webhooks.
+
+        Args:
+            blocks: List of Slack block objects
+
+        Returns:
+            True if sent to at least one webhook successfully
+        """
+        success_count = 0
+        for i, webhook_url in enumerate(self.webhook_urls, 1):
+            try:
+                response = requests.post(
+                    webhook_url,
+                    json={"blocks": blocks},
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"Slack notification sent to webhook {i}/{len(self.webhook_urls)}")
+                    success_count += 1
+                else:
+                    logger.error(f"Slack API error (webhook {i}): {response.status_code} - {response.text}")
+
+            except requests.exceptions.Timeout:
+                logger.error(f"Slack webhook {i} request timed out")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Slack webhook {i} request failed: {e}")
+
+        if success_count > 0:
+            logger.info(f"Slack notification sent to {success_count}/{len(self.webhook_urls)} webhooks")
+            return True
+        return False
 
     def _build_message_blocks(self, auto_fixed: List[Tuple], alerts: List,
                               all_ok: bool) -> List[dict]:
@@ -212,41 +271,11 @@ class SlackNotifier:
             "type": "context",
             "elements": [{
                 "type": "mrkdwn",
-                "text": f"VPS Security Monitor | Next scan in 6 hours"
+                "text": "VPS Security Monitor | Next scan in 6 hours"
             }]
         })
 
         return blocks
-
-    def _send_blocks(self, blocks: List[dict]) -> bool:
-        """Send blocks to Slack webhook.
-
-        Args:
-            blocks: List of Slack block objects
-
-        Returns:
-            True if sent successfully
-        """
-        try:
-            response = requests.post(
-                self.webhook_url,
-                json={"blocks": blocks},
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                logger.info("Slack notification sent successfully")
-                return True
-            else:
-                logger.error(f"Slack API error: {response.status_code} - {response.text}")
-                return False
-
-        except requests.exceptions.Timeout:
-            logger.error("Slack webhook request timed out")
-            return False
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Slack webhook request failed: {e}")
-            return False
 
     def _get_hostname(self) -> str:
         """Get the hostname of this machine."""

@@ -46,11 +46,13 @@ firewall:
 
   # Only these ports should be allowed through the firewall
   allowed_ports:
-    - 22    # SSH
+    - 22222 # SSH (non-standard port)
     - 80    # HTTP
     - 443   # HTTPS
     - 8001  # redirect-mapper
     - 8085  # structured-data-tool
+    - 8000  # redirect-mapper-backend
+    - 8080  # misc services
 
   # Ports that should NEVER be exposed to the internet
   dangerous_ports:

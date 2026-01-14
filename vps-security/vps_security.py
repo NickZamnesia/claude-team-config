@@ -31,7 +31,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
 from checks import ALL_CHECKS, CheckResult, Severity
-from remediation import RollbackManager, FirewallRemediation, PermissionRemediation
+from remediation import RollbackManager, FirewallRemediation, PermissionRemediation, SSHRemediation
 from notifications import SlackNotifier
 
 
@@ -176,6 +176,7 @@ def process_remediation(results: List[CheckResult], config: dict,
         'enable_ufw': FirewallRemediation,
         'add_missing_rules': FirewallRemediation,
         'fix_env_permissions': PermissionRemediation,
+        'fix_ssh_config': SSHRemediation,
     }
 
     auto_fix_actions = remediation_config.get('auto_fix', [])
@@ -195,6 +196,8 @@ def process_remediation(results: List[CheckResult], config: dict,
                 action_type = 'firewall_disabled' if 'enable' in result.fix_action else 'firewall_missing_rules'
             elif 'permission' in result.fix_action.lower():
                 action_type = 'file_permissions'
+            elif 'ssh' in result.fix_action.lower() or result.fix_action == 'fix_ssh_config':
+                action_type = 'ssh_config'
 
             if action_type in auto_fix_actions or result.fix_action in auto_fix_actions:
                 # Get remediation class

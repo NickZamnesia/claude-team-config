@@ -177,20 +177,43 @@ class SlackNotifier:
             }
         })
 
-        # All OK case
-        if all_ok and not auto_fixed and not alerts:
+        # Import Severity for categorizing alerts
+        from checks.base import Severity
+        critical_alerts = [a for a in alerts if a.severity == Severity.CRITICAL]
+        warning_alerts = [a for a in alerts if a.severity == Severity.WARNING]
+        info_alerts = [a for a in alerts if a.severity == Severity.INFO]
+
+        # Show green checkmark if no critical or warning issues
+        if not critical_alerts and not warning_alerts and not auto_fixed:
             blocks.append({
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":white_check_mark: *All checks passed!* Your VPS security is great - no issues detected."
+                    "text": ":white_check_mark: *All checks passed!* Your VPS security is great."
                 }
+            })
+            # Still show info items if any
+            if info_alerts:
+                info_text = f"*Info: {len(info_alerts)}*\n"
+                info_text += "\n".join([f"- {a.message}" for a in info_alerts])
+                blocks.append({
+                    "type": "context",
+                    "elements": [{
+                        "type": "mrkdwn",
+                        "text": info_text
+                    }]
+                })
+            blocks.append({"type": "divider"})
+            blocks.append({
+                "type": "context",
+                "elements": [{
+                    "type": "mrkdwn",
+                    "text": "VPS Security Monitor | Next scan in 6 hours"
+                }]
             })
             return blocks
 
         # Critical alerts (with mention)
-        from checks.base import Severity
-        critical_alerts = [a for a in alerts if a.severity == Severity.CRITICAL]
         if critical_alerts:
             mention = self.mention_on_critical if critical_alerts else ""
             alert_text = f"*CRITICAL ALERTS: {len(critical_alerts)}*\n"
@@ -238,7 +261,6 @@ class SlackNotifier:
             })
 
         # Warnings
-        warning_alerts = [a for a in alerts if a.severity == Severity.WARNING]
         if warning_alerts:
             warn_text = f"*Warnings: {len(warning_alerts)}*\n"
             warn_text += "\n".join([f"- {a.message}" for a in warning_alerts])
@@ -252,7 +274,6 @@ class SlackNotifier:
             })
 
         # Info items
-        info_alerts = [a for a in alerts if a.severity == Severity.INFO]
         if info_alerts:
             info_text = f"*Info: {len(info_alerts)}*\n"
             info_text += "\n".join([f"- {a.message}" for a in info_alerts])

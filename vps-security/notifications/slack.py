@@ -183,7 +183,7 @@ class SlackNotifier:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*All checks passed* - No security issues detected"
+                    "text": ":white_check_mark: *All checks passed!* Your VPS security is great - no issues detected."
                 }
             })
             return blocks
